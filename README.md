@@ -45,6 +45,16 @@ python scripts/run_research.py
 
 On macOS/Linux, use `source .venv/bin/activate` instead of the Windows activation command.
 
+## Streamlit App
+
+Run the interactive research dashboard with:
+
+```bash
+streamlit run streamlit_app.py
+```
+
+The app lets you change the simulation length, random seed, entry threshold and transaction-cost assumption, then inspect the market path, model validation results, strategy equity curve and engineered features.
+
 ## Example Output
 
 ```text
