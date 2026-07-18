@@ -20,11 +20,13 @@ def build_features(data: pd.DataFrame) -> pd.DataFrame:
     frame["target"] = (frame["return"].shift(-1) > 0).astype(int)
     frame["next_return"] = frame["return"].shift(-1)
 
-    feature_columns = [column for column in frame.columns if column.startswith(("return_lag", "momentum", "volatility", "drawdown"))]
-    clean = frame.dropna(subset=feature_columns + ["target", "next_return"]).reset_index(drop=True)
-    clean[feature_columns] = clean[feature_columns].replace([np.inf, -np.inf], np.nan)
-    return clean.dropna(subset=feature_columns).reset_index(drop=True)
+    prefixes = ("return_lag", "momentum", "volatility", "drawdown")
+    feature_cols = [column for column in frame.columns if column.startswith(prefixes)]
+    clean = frame.dropna(subset=feature_cols + ["target", "next_return"]).reset_index(drop=True)
+    clean[feature_cols] = clean[feature_cols].replace([np.inf, -np.inf], np.nan)
+    return clean.dropna(subset=feature_cols).reset_index(drop=True)
 
 
 def feature_columns(frame: pd.DataFrame) -> list[str]:
-    return [column for column in frame.columns if column.startswith(("return_lag", "momentum", "volatility", "drawdown"))]
+    prefixes = ("return_lag", "momentum", "volatility", "drawdown")
+    return [column for column in frame.columns if column.startswith(prefixes)]

@@ -4,7 +4,11 @@ import numpy as np
 import pandas as pd
 
 
-def run_backtest(predictions: pd.DataFrame, entry_threshold: float = 0.54, transaction_cost: float = 0.0002) -> tuple[pd.DataFrame, dict[str, float]]:
+def run_backtest(
+    predictions: pd.DataFrame,
+    entry_threshold: float = 0.54,
+    transaction_cost: float = 0.0002,
+) -> tuple[pd.DataFrame, dict[str, float]]:
     """Convert predicted probabilities into a simple cost-aware strategy."""
     frame = predictions.copy()
     frame["position"] = 0

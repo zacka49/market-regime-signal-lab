@@ -6,29 +6,26 @@ from regime_signal_lab.model import candidate_models, choose_best, walk_forward_
 from regime_signal_lab.simulate import simulate_market
 
 
-def main() -> None:
-    raw = simulate_market()
+def _run_pipeline(seed: int) -> dict[str, float]:
+    raw = simulate_market(n_days=1200, seed=seed)
     frame = build_features(raw)
     features = feature_columns(frame)
-
     results = [
-        walk_forward_validate(frame, features, name, model)
+        walk_forward_validate(frame, features, name, model, min_train_size=400, test_size=150)
         for name, model in candidate_models().items()
     ]
     best = choose_best(results)
     _, metrics = run_backtest(best.predictions)
-
-    print("Model comparison")
-    for result in results:
-        print(f"{result.name:20s} auc={result.auc:.3f} accuracy={result.accuracy:.3f}")
-
-    print("\nSelected model")
-    print(best.name)
-
-    print("\nBacktest")
-    for key, value in metrics.items():
-        print(f"{key:18s} {value:.3f}")
+    return metrics
 
 
-if __name__ == "__main__":
-    main()
+def test_full_pipeline_is_deterministic_for_a_fixed_seed():
+    first = _run_pipeline(seed=7)
+    second = _run_pipeline(seed=7)
+    assert first == second
+
+
+def test_full_pipeline_changes_with_a_different_seed():
+    baseline = _run_pipeline(seed=7)
+    other = _run_pipeline(seed=8)
+    assert baseline != other

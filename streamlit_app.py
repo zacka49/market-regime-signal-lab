@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
-import sys
-
-ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT / "src"))
-
+import pandas as pd
 import streamlit as st
 
 from regime_signal_lab.backtest import run_backtest
 from regime_signal_lab.features import build_features, feature_columns
 from regime_signal_lab.model import candidate_models, choose_best, walk_forward_validate
+from regime_signal_lab.regime_detection import detect_regimes
 from regime_signal_lab.simulate import simulate_market
 
 
@@ -29,6 +25,12 @@ def run_research(n_days: int, seed: int, entry_threshold: float, transaction_cos
         entry_threshold=entry_threshold,
         transaction_cost=transaction_cost_bps / 10_000,
     )
+    # Whole-sample HMM fit for the regime-detection diagnostic tab. This uses
+    # smoothed (non-causal) posteriors -- fine for illustrating detection
+    # quality against ground truth, but NOT how regime features are built for
+    # the trading model (see regime_detection.walk_forward_regime_posteriors,
+    # which is causal and refit per walk-forward fold to avoid leakage).
+    detection = detect_regimes(raw["return"].to_numpy(), raw["regime"].to_numpy(), n_states=3, seed=0)
     return {
         "raw": raw,
         "features": frame,
@@ -36,13 +38,17 @@ def run_research(n_days: int, seed: int, entry_threshold: float, transaction_cos
         "best": best,
         "backtest": backtest,
         "metrics": metrics,
+        "detection": detection,
     }
 
 
 st.set_page_config(page_title="Market Regime Signal Lab", layout="wide")
 
 st.title("Market Regime Signal Lab")
-st.caption("Noisy time-series simulation, feature engineering, walk-forward validation and cost-aware strategy evaluation.")
+st.caption(
+    "Noisy time-series simulation, feature engineering, walk-forward validation "
+    "and cost-aware strategy evaluation."
+)
 
 with st.sidebar:
     st.header("Experiment")
@@ -65,12 +71,45 @@ metric_cols[2].metric("Accuracy", f"{best.accuracy:.3f}")
 metric_cols[3].metric("Total return", f"{metrics['total_return']:.1%}")
 metric_cols[4].metric("Sharpe", f"{metrics['annualised_sharpe']:.2f}")
 
-tab_price, tab_models, tab_strategy, tab_data = st.tabs(["Market Data", "Model Validation", "Strategy", "Sample Data"])
+tab_names = ["Market Data", "Regime Detection", "Model Validation", "Strategy", "Sample Data"]
+tab_price, tab_regimes, tab_models, tab_strategy, tab_data = st.tabs(tab_names)
 
 with tab_price:
     st.subheader("Simulated Market With Hidden Regimes")
     st.line_chart(raw.set_index("date")[["price"]])
     st.bar_chart(raw["regime"].value_counts().sort_index())
+
+with tab_regimes:
+    st.subheader("Gaussian HMM Regime Detection vs Ground Truth")
+    detection = research["detection"]
+    det_cols = st.columns(2)
+    det_cols[0].metric(
+        "Detection accuracy", f"{detection.accuracy:.1%}", help="Chance level for 3 states = 33.3%"
+    )
+    det_cols[1].metric("Mean detection lag", f"{detection.mean_detection_lag:.1f} trading days")
+
+    st.write("True regime vs HMM-inferred regime (state labels aligned via Hungarian matching)")
+    regime_compare = pd.DataFrame(
+        {
+            "true_regime": raw["regime"].to_numpy(),
+            "inferred_regime": detection.aligned_states,
+        },
+        index=raw["date"],
+    )
+    st.line_chart(regime_compare)
+
+    st.write("Filtered/smoothed posterior probability per regime")
+    posterior_cols = [f"P(regime {i})" for i in range(detection.posterior.shape[1])]
+    posterior_df = pd.DataFrame(detection.posterior, columns=posterior_cols, index=raw["date"])
+    st.area_chart(posterior_df)
+
+    st.write("Confusion matrix (rows = true regime, columns = inferred regime)")
+    confusion_df = pd.DataFrame(
+        detection.confusion,
+        index=[f"true_{i}" for i in range(detection.confusion.shape[0])],
+        columns=[f"pred_{i}" for i in range(detection.confusion.shape[1])],
+    )
+    st.dataframe(confusion_df, use_container_width=True)
 
 with tab_models:
     st.subheader("Walk-Forward Model Comparison")

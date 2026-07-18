@@ -5,8 +5,10 @@ venv/
 .env
 .pytest_cache/
 .mypy_cache/
+.coverage
 dist/
 build/
 *.egg-info/
 outputs/
 *.csv
+/data/
